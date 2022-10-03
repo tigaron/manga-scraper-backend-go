@@ -1,0 +1,114 @@
+org: tigaron
+app: manga-scraper
+service: manga-scraper-be-go
+
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  runtime: go1.x
+  region: ap-southeast-1
+  stage: ${opt:stage, 'dev'}
+  logRetentionInDays: 7
+  environment:
+    SERIES_TABLE: webtoon-series-table-${sls:stage}
+    CHAPTERS_TABLE: webtoon-chapters-table-${sls:stage}
+  iam:
+    role:
+      name: IAM-${self:service}-${sls:stage}
+      path: /${self:service}-${sls:stage}/
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+          Resource:
+            - "arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:provider.environment.SERIES_TABLE}"
+            - "arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:provider.environment.CHAPTERS_TABLE}"
+
+functions:
+  Scraper:
+    handler: bin/main
+    name: ${self:service}-${sls:stage}
+    description: Scraper service to fetch webtoons data
+    memorySize: 2048
+    timeout: 300
+    package:
+      patterns:
+        - "./bin/main"
+    events:
+      - sqs:
+          arn:
+            Fn::GetAtt: [ GoScraperQueue, Arn ]
+          batchSize: 1
+
+resources:
+  Resources:
+    GoSeriesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.SERIES_TABLE}
+        AttributeDefinitions:
+          - AttributeName: 'WebtoonProvider'
+            AttributeType: 'S'
+          - AttributeName: 'SeriesId'
+            AttributeType: 'S'
+        KeySchema:
+          - AttributeName: 'WebtoonProvider'
+            KeyType: 'HASH'
+          - AttributeName: 'SeriesId'
+            KeyType: 'RANGE'
+        ProvisionedThroughput:
+          ReadCapacityUnits: ${self:custom.${sls:stage}.TableRCU}
+          WriteCapacityUnits: ${self:custom.${sls:stage}.TableWCU}
+    GoChaptersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.CHAPTERS_TABLE}
+        AttributeDefinitions:
+          - AttributeName: 'SeriesProvider'
+            AttributeType: 'S'
+          - AttributeName: 'ChapterId'
+            AttributeType: 'S'
+        KeySchema:
+          - AttributeName: 'SeriesProvider'
+            KeyType: 'HASH'
+          - AttributeName: 'ChapterId'
+            KeyType: 'RANGE'
+        ProvisionedThroughput:
+          ReadCapacityUnits: ${self:custom.${sls:stage}.TableRCU}
+          WriteCapacityUnits: ${self:custom.${sls:stage}.TableWCU}
+    GoDeadLetterQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: webtoon-dlq-${sls:stage}.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: false
+        DelaySeconds: 0
+        MaximumMessageSize: 262144
+        MessageRetentionPeriod: 1209600
+        ReceiveMessageWaitTimeSeconds: 20
+        VisibilityTimeout: 300
+    GoScraperQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: webtoon-sq-${sls:stage}.fifo
+        FifoQueue: true
+        ContentBasedDeduplication: false
+        DelaySeconds: 0
+        MaximumMessageSize: 262144
+        MessageRetentionPeriod: 1209600
+        ReceiveMessageWaitTimeSeconds: 20
+        RedrivePolicy:
+          deadLetterTargetArn:
+            Fn::GetAtt: [ GoDeadLetterQueue, Arn ]
+          maxReceiveCount: 2
+        VisibilityTimeout: 300
+
+custom:
+  prod:
+    TableRCU: 10
+    TableWCU: 10
+  dev:
+    TableRCU: 1
+    TableWCU: 1
