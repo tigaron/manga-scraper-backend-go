@@ -28,18 +28,20 @@ func main() {
 }
 
 func handler(sqsEvent events.SQSEvent) error {
-	message := sqsEvent.Records[0].MessageAttributes
-	switch *message["RequestType"].StringValue {
+	requestType := sqsEvent.Records[0].MessageAttributes["RequestType"].StringValue
+	provider := sqsEvent.Records[0].MessageAttributes["Provider"].StringValue
+	sourceUrl := sqsEvent.Records[0].MessageAttributes["SourceUrl"].StringValue
+	switch *requestType {
 	case "series-list":
-		return handlers.SeriesListRequest(message, seriesTable, ddbClient)
+		return handlers.SeriesListRequest(provider, sourceUrl, seriesTable, ddbClient)
 	case "series-data":
-		return handlers.SeriesDataRequest(message, seriesTable, ddbClient)
+		return handlers.SeriesDataRequest(provider, sourceUrl, seriesTable, ddbClient)
 	case "chapters-list":
-		return handlers.ChapterListRequest(message, chaptersTable, ddbClient)
+		return handlers.ChapterListRequest(provider, sourceUrl, chaptersTable, ddbClient)
 	case "chapters-data":
-		return handlers.ChapterDataRequest(message, chaptersTable, ddbClient)
+		return handlers.ChapterDataRequest(provider, sourceUrl, chaptersTable, ddbClient)
 	default:
-		log.Printf("Couldn't handle request type of '%v'", *message["RequestType"].StringValue)
+		log.Printf("Couldn't handle request type of '%v'", *requestType)
 		return nil
 	}
 }
