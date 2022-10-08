@@ -53,7 +53,7 @@ type ChapterNew struct {
 	ScrapeDate        string
 }
 
-func ScrapeSeriesList(provider *string, sourceUrl *string, tableName string) ([]SeriesNew, error) {
+func ScrapeSeriesList(provider *string, sourceUrl *string) ([]SeriesNew, error) {
 	var result = new([]SeriesNew)
 	var scrapeError error
 
@@ -96,7 +96,7 @@ func ScrapeSeriesList(provider *string, sourceUrl *string, tableName string) ([]
 	return *result, scrapeError
 }
 
-func ScrapeSeriesData(provider *string, sourceUrl *string, tableName string) (*SeriesKey, *SeriesUpdate, error) {
+func ScrapeSeriesData(provider *string, sourceUrl *string) (*SeriesKey, *SeriesUpdate, error) {
 	var key SeriesKey
 	var data SeriesUpdate
 	var scrapeError error
@@ -120,15 +120,16 @@ func ScrapeSeriesData(provider *string, sourceUrl *string, tableName string) (*S
 
 	collector.OnHTML("html", func(h *colly.HTMLElement) {
 		urlArr := strings.Split(*sourceUrl, "/")
-		re := regexp.MustCompile(`^\d+-?`)
+		reId := regexp.MustCompile(`^\d+-?`)
 		key = SeriesKey{
 			WebtoonProvider: *provider,
-			SeriesId:        re.ReplaceAllString(urlArr[len(urlArr)-2], ""),
+			SeriesId:        reId.ReplaceAllString(urlArr[len(urlArr)-2], ""),
 		}
+		reSynopsis := regexp.MustCompile(`\n`)
 		data = SeriesUpdate{
 			SeriesCover:    h.ChildAttr("div.thumb img", "src"),
 			SeriesShortUrl: h.ChildAttr("link[rel='shortlink']", "href"),
-			SeriesSynopsis: h.ChildText("div.entry-content"), // TODO do something about the \n or div
+			SeriesSynopsis: reSynopsis.ReplaceAllString(strings.TrimSpace(h.ChildText("div.entry-content")), `<br />`),
 			ScrapeDate:     time.Now().Format(time.RFC3339),
 		}
 	})
@@ -142,10 +143,10 @@ func ScrapeSeriesData(provider *string, sourceUrl *string, tableName string) (*S
 	return &key, &data, scrapeError
 }
 
-func ScrapeChaptersList(provider *string, sourceUrl *string, tableName string) error {
+func ScrapeChaptersList(provider *string, sourceUrl *string) error {
 	return nil
 }
 
-func ScrapeChaptersData(provider *string, sourceUrl *string, tableName string) error {
+func ScrapeChaptersData(provider *string, sourceUrl *string) error {
 	return nil
 }

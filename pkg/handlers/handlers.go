@@ -3,6 +3,8 @@ package handlers
 import (
 	"log"
 	"manga-scraper-be-go/pkg/scraper"
+	"strconv"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
@@ -15,7 +17,7 @@ import (
 )
 
 func SeriesListRequest(provider *string, sourceUrl *string, tableName string, ddbClient dynamodbiface.DynamoDBAPI, queueUrl string, sqsClient sqsiface.SQSAPI) error {
-	data, err := scraper.ScrapeSeriesList(provider, sourceUrl, tableName)
+	data, err := scraper.ScrapeSeriesList(provider, sourceUrl)
 	if err != nil {
 		return err
 	}
@@ -48,7 +50,7 @@ func SeriesListRequest(provider *string, sourceUrl *string, tableName string, dd
 			log.Printf("Finished storing input of %v.", entry.SeriesId)
 			queue := &sqs.SendMessageBatchRequestEntry{
 				Id:                     aws.String(uuid.NewString()),
-				MessageDeduplicationId: aws.String(uuid.NewSHA1(uuid.NameSpaceURL, []byte(entry.SeriesUrl)).String()), // TODO add time window of 1 minute
+				MessageDeduplicationId: aws.String(strconv.Itoa(time.Now().Minute()) + "-" + uuid.NewSHA1(uuid.NameSpaceURL, []byte(entry.SeriesUrl)).String()),
 				MessageGroupId:         provider,
 				MessageBody:            aws.String("series-data of " + entry.SeriesId),
 				MessageAttributes: map[string]*sqs.MessageAttributeValue{
@@ -89,7 +91,7 @@ func SeriesListRequest(provider *string, sourceUrl *string, tableName string, dd
 }
 
 func SeriesDataRequest(provider *string, sourceUrl *string, tableName string, ddbClient dynamodbiface.DynamoDBAPI) error {
-	key, data, err := scraper.ScrapeSeriesData(provider, sourceUrl, tableName)
+	key, data, err := scraper.ScrapeSeriesData(provider, sourceUrl)
 	if err != nil {
 		return err
 	}
@@ -129,11 +131,11 @@ func SeriesDataRequest(provider *string, sourceUrl *string, tableName string, dd
 }
 
 func ChapterListRequest(provider *string, sourceUrl *string, tableName string, ddbClient dynamodbiface.DynamoDBAPI, queueUrl string, sqsClient sqsiface.SQSAPI) error {
-	err := scraper.ScrapeChaptersList(provider, sourceUrl, tableName)
+	err := scraper.ScrapeChaptersList(provider, sourceUrl)
 	return err
 }
 
 func ChapterDataRequest(provider *string, sourceUrl *string, tableName string, ddbClient dynamodbiface.DynamoDBAPI) error {
-	err := scraper.ScrapeChaptersData(provider, sourceUrl, tableName)
+	err := scraper.ScrapeChaptersData(provider, sourceUrl)
 	return err
 }
