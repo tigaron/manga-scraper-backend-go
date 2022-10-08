@@ -1,0 +1,14 @@
+{
+	"RequestType": {
+		"DataType": "String",
+		"StringValue": "series-list"
+	},
+	"Provider": {
+		"DataType": "String",
+		"StringValue": "asura"
+	},
+	"SourceUrl": {
+		"DataType": "String",
+		"StringValue": "https://asura.gg/manga/list-mode/"
+	}
+}

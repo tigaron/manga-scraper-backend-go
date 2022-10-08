@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb/expression"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
+	"github.com/google/uuid"
 )
 
 func SeriesListRequest(provider *string, sourceUrl *string, tableName string, ddbClient dynamodbiface.DynamoDBAPI, queueUrl string, sqsClient sqsiface.SQSAPI) error {
@@ -20,18 +21,16 @@ func SeriesListRequest(provider *string, sourceUrl *string, tableName string, dd
 	}
 
 	var queues []*sqs.SendMessageBatchRequestEntry
-	for _, entry := range *data {
+	for _, entry := range data {
 		item, err := dynamodbattribute.MarshalMap(entry)
 		if err != nil {
 			log.Printf("Failed to marshal entry of %v. Here's why: %v\n", entry.SeriesId, err)
-			continue
 		}
 
 		cond := expression.AttributeNotExists(expression.Name("SeriesId"))
 		expr, err := expression.NewBuilder().WithCondition(cond).Build()
 		if err != nil {
 			log.Printf("Failed to build expression for %v. Here's why: %v\n", entry.SeriesId, err)
-			continue
 		}
 
 		input := &dynamodb.PutItemInput{
@@ -48,11 +47,10 @@ func SeriesListRequest(provider *string, sourceUrl *string, tableName string, dd
 		} else {
 			log.Printf("Finished storing input of %v.", entry.SeriesId)
 			queue := &sqs.SendMessageBatchRequestEntry{
-				// QueueUrl:    aws.String(""),
-				Id:                     aws.String("as"),
-				MessageDeduplicationId: aws.String("as"),
-				MessageGroupId:         aws.String("as"),
-				MessageBody:            aws.String("Information about the NY Times fiction bestseller for the week of 12/11/2016."),
+				Id:                     aws.String(uuid.NewString()),
+				MessageDeduplicationId: aws.String(uuid.NewSHA1(uuid.NameSpaceURL, []byte(entry.SeriesUrl)).String()), // TODO add time window of 1 minute
+				MessageGroupId:         provider,
+				MessageBody:            aws.String("series-data of " + entry.SeriesId),
 				MessageAttributes: map[string]*sqs.MessageAttributeValue{
 					"RequestType": {
 						DataType:    aws.String("String"),
@@ -72,15 +70,20 @@ func SeriesListRequest(provider *string, sourceUrl *string, tableName string, dd
 		}
 	}
 
-	batch := 25
+	batch := 10
 	for i := 0; i < len(queues); i += batch {
 		j := i + batch
 		if j > len(queues) {
 			j = len(queues)
 		}
-		input := sqs.SendMessageBatchInput
-		// _, err := sqsClient.SendMessageBatch(queues[i:j])
-		// fmt.Println(*queues[i:j]) // Process the batch.
+		input := &sqs.SendMessageBatchInput{
+			QueueUrl: aws.String(queueUrl),
+			Entries:  queues[i:j],
+		}
+		_, err := sqsClient.SendMessageBatch(input)
+		if err != nil {
+			log.Printf("Failed to send batch message. Here's why: %v\n", err)
+		}
 	}
 	return nil
 }

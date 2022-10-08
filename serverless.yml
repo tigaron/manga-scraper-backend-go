@@ -13,6 +13,7 @@ provider:
   environment:
     SERIES_TABLE: webtoon-series-table-${sls:stage}
     CHAPTERS_TABLE: webtoon-chapters-table-${sls:stage}
+    QUEUE_URL: https://sqs.${aws:region}.amazonaws.com/${aws:accountId}/webtoon-sq-${sls:stage}.fifo
   iam:
     role:
       name: IAM-${self:service}-${sls:stage}
@@ -23,8 +24,13 @@ provider:
             - dynamodb:PutItem
             - dynamodb:UpdateItem
           Resource:
-            - "arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:provider.environment.SERIES_TABLE}"
-            - "arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:provider.environment.CHAPTERS_TABLE}"
+            - Fn::GetAtt: [ GoSeriesTable, Arn ]
+            - Fn::GetAtt: [ GoChaptersTable, Arn ]
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+          Resource:
+            - Fn::GetAtt: [ GoScraperQueue, Arn ]
 
 functions:
   Scraper:

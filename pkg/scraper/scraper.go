@@ -53,7 +53,7 @@ type ChapterNew struct {
 	ScrapeDate        string
 }
 
-func ScrapeSeriesList(provider *string, sourceUrl *string, tableName string) (*[]SeriesNew, error) {
+func ScrapeSeriesList(provider *string, sourceUrl *string, tableName string) ([]SeriesNew, error) {
 	var result = new([]SeriesNew)
 	var scrapeError error
 
@@ -93,7 +93,7 @@ func ScrapeSeriesList(provider *string, sourceUrl *string, tableName string) (*[
 
 	collector.Visit(*sourceUrl)
 
-	return result, scrapeError
+	return *result, scrapeError
 }
 
 func ScrapeSeriesData(provider *string, sourceUrl *string, tableName string) (*SeriesKey, *SeriesUpdate, error) {
