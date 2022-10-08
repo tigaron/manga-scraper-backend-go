@@ -29,19 +29,28 @@ type SeriesNew struct {
 	ScrapeDate      string
 }
 
-type Chapter struct {
-	SeriesProvider  string
-	ChapterId       string
+type ChapterKey struct {
+	SeriesProvider string
+	ChapterId      string
+}
+
+type ChapterUpdate struct {
 	ChapterTitle    string
-	ChapterNumber   string
-	ChapterDate     string
-	ChapterUrl      string
 	ChapterShortUrl string
-	ChapterOrder    int
 	ChapterPrev     string
 	ChapterNext     string
 	ChapterContent  []string
 	ScrapeDate      string
+}
+
+type ChapterNew struct {
+	SeriesProvider    string
+	ChapterId         string
+	ChapterShortTitle string
+	ChapterDate       string
+	ChapterUrl        string
+	ChapterOrder      int
+	ScrapeDate        string
 }
 
 func ScrapeSeriesList(provider *string, sourceUrl *string, tableName string) (*[]SeriesNew, error) {
@@ -87,7 +96,7 @@ func ScrapeSeriesList(provider *string, sourceUrl *string, tableName string) (*[
 	return result, scrapeError
 }
 
-func ScrapeSeriesData(provider *string, sourceUrl *string, tableName string) (SeriesKey, SeriesUpdate, error) {
+func ScrapeSeriesData(provider *string, sourceUrl *string, tableName string) (*SeriesKey, *SeriesUpdate, error) {
 	var key SeriesKey
 	var data SeriesUpdate
 	var scrapeError error
@@ -119,7 +128,7 @@ func ScrapeSeriesData(provider *string, sourceUrl *string, tableName string) (Se
 		data = SeriesUpdate{
 			SeriesCover:    h.ChildAttr("div.thumb img", "src"),
 			SeriesShortUrl: h.ChildAttr("link[rel='shortlink']", "href"),
-			SeriesSynopsis: h.ChildText("div.entry-content"),
+			SeriesSynopsis: h.ChildText("div.entry-content"), // TODO do something about the \n or div
 			ScrapeDate:     time.Now().Format(time.RFC3339),
 		}
 	})
@@ -130,7 +139,7 @@ func ScrapeSeriesData(provider *string, sourceUrl *string, tableName string) (Se
 
 	collector.Visit(*sourceUrl)
 
-	return key, data, scrapeError
+	return &key, &data, scrapeError
 }
 
 func ScrapeChaptersList(provider *string, sourceUrl *string, tableName string) error {

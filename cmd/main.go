@@ -10,12 +10,16 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
+	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
 )
 
 var (
 	seriesTable   = os.Getenv("SERIES_TABLE")
 	chaptersTable = os.Getenv("CHAPTERS_TABLE")
+	queueUrl      = os.Getenv("QUEUE_URL")
 	ddbClient     dynamodbiface.DynamoDBAPI
+	sqsClient     sqsiface.SQSAPI
 )
 
 func main() {
@@ -24,6 +28,7 @@ func main() {
 	}))
 
 	ddbClient = dynamodb.New(awsSession)
+	sqsClient = sqs.New(awsSession)
 	lambda.Start(handler)
 }
 
@@ -33,11 +38,11 @@ func handler(sqsEvent events.SQSEvent) error {
 	sourceUrl := sqsEvent.Records[0].MessageAttributes["SourceUrl"].StringValue
 	switch *requestType {
 	case "series-list":
-		return handlers.SeriesListRequest(provider, sourceUrl, seriesTable, ddbClient)
+		return handlers.SeriesListRequest(provider, sourceUrl, seriesTable, ddbClient, queueUrl, sqsClient)
 	case "series-data":
 		return handlers.SeriesDataRequest(provider, sourceUrl, seriesTable, ddbClient)
 	case "chapters-list":
-		return handlers.ChapterListRequest(provider, sourceUrl, chaptersTable, ddbClient)
+		return handlers.ChapterListRequest(provider, sourceUrl, chaptersTable, ddbClient, queueUrl, sqsClient)
 	case "chapters-data":
 		return handlers.ChapterDataRequest(provider, sourceUrl, chaptersTable, ddbClient)
 	default:
@@ -45,20 +50,3 @@ func handler(sqsEvent events.SQSEvent) error {
 		return nil
 	}
 }
-
-/*
-MessageAttributes: {
-	"RequestType": {
-		DataType: "String",
-		StringValue: "series-list"
-	},
-	"Provider": {
-		DataType: "String",
-		StringValue: "asura"
-	},
-	"SourceUrl": {
-		DataType: "String",
-		StringValue: "https://asura.gg/manga/list-mode/"
-	},
-}
-*/

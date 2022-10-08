@@ -9,14 +9,17 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
 	"github.com/aws/aws-sdk-go/service/dynamodb/expression"
+	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
 )
 
-func SeriesListRequest(provider *string, sourceUrl *string, tableName string, ddbClient dynamodbiface.DynamoDBAPI) error {
+func SeriesListRequest(provider *string, sourceUrl *string, tableName string, ddbClient dynamodbiface.DynamoDBAPI, queueUrl string, sqsClient sqsiface.SQSAPI) error {
 	data, err := scraper.ScrapeSeriesList(provider, sourceUrl, tableName)
 	if err != nil {
 		return err
 	}
 
+	var queues []*sqs.SendMessageBatchRequestEntry
 	for _, entry := range *data {
 		item, err := dynamodbattribute.MarshalMap(entry)
 		if err != nil {
@@ -44,11 +47,41 @@ func SeriesListRequest(provider *string, sourceUrl *string, tableName string, dd
 			log.Printf("Failed to store input of %v. Here's why: %v\n", entry.SeriesId, err)
 		} else {
 			log.Printf("Finished storing input of %v.", entry.SeriesId)
-			// _ = SeriesDataRequest(provider, &entry.SeriesUrl, tableName, ddbClient)
-			// TODO add new queue to update series data
+			queue := &sqs.SendMessageBatchRequestEntry{
+				// QueueUrl:    aws.String(""),
+				Id:                     aws.String("as"),
+				MessageDeduplicationId: aws.String("as"),
+				MessageGroupId:         aws.String("as"),
+				MessageBody:            aws.String("Information about the NY Times fiction bestseller for the week of 12/11/2016."),
+				MessageAttributes: map[string]*sqs.MessageAttributeValue{
+					"RequestType": {
+						DataType:    aws.String("String"),
+						StringValue: aws.String("series-data"),
+					},
+					"Provider": {
+						DataType:    aws.String("String"),
+						StringValue: provider,
+					},
+					"SourceUrl": {
+						DataType:    aws.String("String"),
+						StringValue: aws.String(entry.SeriesUrl),
+					},
+				},
+			}
+			queues = append(queues, queue)
 		}
 	}
 
+	batch := 25
+	for i := 0; i < len(queues); i += batch {
+		j := i + batch
+		if j > len(queues) {
+			j = len(queues)
+		}
+		input := sqs.SendMessageBatchInput
+		// _, err := sqsClient.SendMessageBatch(queues[i:j])
+		// fmt.Println(*queues[i:j]) // Process the batch.
+	}
 	return nil
 }
 
@@ -92,7 +125,7 @@ func SeriesDataRequest(provider *string, sourceUrl *string, tableName string, dd
 	}
 }
 
-func ChapterListRequest(provider *string, sourceUrl *string, tableName string, ddbClient dynamodbiface.DynamoDBAPI) error {
+func ChapterListRequest(provider *string, sourceUrl *string, tableName string, ddbClient dynamodbiface.DynamoDBAPI, queueUrl string, sqsClient sqsiface.SQSAPI) error {
 	err := scraper.ScrapeChaptersList(provider, sourceUrl, tableName)
 	return err
 }
