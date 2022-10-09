@@ -41,12 +41,14 @@ func handler(sqsEvent events.SQSEvent) error {
 		return handlers.SeriesListRequest(provider, sourceUrl, seriesTable, ddbClient, queueUrl, sqsClient)
 	case "series-data":
 		return handlers.SeriesDataRequest(provider, sourceUrl, seriesTable, ddbClient)
-	case "chapters-list":
+	case "chapter-list":
 		return handlers.ChapterListRequest(provider, sourceUrl, chaptersTable, ddbClient, queueUrl, sqsClient)
-	case "chapters-data":
+	case "chapter-data":
 		return handlers.ChapterDataRequest(provider, sourceUrl, chaptersTable, ddbClient)
+	case "chapter-update": // TODO
+		return nil
 	default:
-		log.Printf("Couldn't handle request type of '%v'", *requestType)
+		log.Fatalf("Couldn't handle request type of '%v'", *requestType)
 		return nil
 	}
 }

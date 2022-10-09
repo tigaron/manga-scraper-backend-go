@@ -26,13 +26,13 @@ func SeriesListRequest(provider *string, sourceUrl *string, tableName string, dd
 	for _, entry := range data {
 		item, err := dynamodbattribute.MarshalMap(entry)
 		if err != nil {
-			log.Printf("Failed to marshal entry of %v. Here's why: %v\n", entry.SeriesId, err)
+			log.Fatalf("Failed to marshal entry of %v. Here's why: %v\n", entry.SeriesId, err.Error())
 		}
 
 		cond := expression.AttributeNotExists(expression.Name("SeriesId"))
 		expr, err := expression.NewBuilder().WithCondition(cond).Build()
 		if err != nil {
-			log.Printf("Failed to build expression for %v. Here's why: %v\n", entry.SeriesId, err)
+			log.Fatalf("Failed to build expression for %v. Here's why: %v\n", entry.SeriesId, err.Error())
 		}
 
 		input := &dynamodb.PutItemInput{
@@ -45,7 +45,7 @@ func SeriesListRequest(provider *string, sourceUrl *string, tableName string, dd
 
 		_, err = ddbClient.PutItem(input)
 		if err != nil {
-			log.Printf("Failed to store input of %v. Here's why: %v\n", entry.SeriesId, err)
+			log.Fatalf("Failed to store input of %v. Here's why: %v\n", entry.SeriesId, err.Error())
 		} else {
 			log.Printf("Finished storing input of %v.", entry.SeriesId)
 			queue := &sqs.SendMessageBatchRequestEntry{
@@ -84,7 +84,7 @@ func SeriesListRequest(provider *string, sourceUrl *string, tableName string, dd
 		}
 		_, err := sqsClient.SendMessageBatch(input)
 		if err != nil {
-			log.Printf("Failed to send batch message. Here's why: %v\n", err)
+			log.Fatalf("Failed to send batch message. Here's why: %v\n", err.Error())
 		}
 	}
 	return nil
@@ -98,7 +98,7 @@ func SeriesDataRequest(provider *string, sourceUrl *string, tableName string, dd
 
 	updateKey, err := dynamodbattribute.MarshalMap(key)
 	if err != nil {
-		log.Printf("Failed to marshal update key of %v. Here's why: %v\n", key.SeriesId, err)
+		log.Fatalf("Failed to marshal update key of %v. Here's why: %v\n", key.SeriesId, err.Error())
 		return err
 	}
 
@@ -122,7 +122,7 @@ func SeriesDataRequest(provider *string, sourceUrl *string, tableName string, dd
 
 	_, err = ddbClient.UpdateItem(input)
 	if err != nil {
-		log.Printf("Failed to store input of %v. Here's why: %v\n", key.SeriesId, err)
+		log.Fatalf("Failed to store input of %v. Here's why: %v\n", key.SeriesId, err.Error())
 		return err
 	} else {
 		log.Printf("Finished storing input of %v.", key.SeriesId)
@@ -140,13 +140,13 @@ func ChapterListRequest(provider *string, sourceUrl *string, tableName string, d
 	for _, entry := range data {
 		item, err := dynamodbattribute.MarshalMap(entry)
 		if err != nil {
-			log.Printf("Failed to marshal entry of %v. Here's why: %v\n", entry.ChapterId, err)
+			log.Fatalf("Failed to marshal entry of %v. Here's why: %v\n", entry.ChapterId, err.Error())
 		}
 
 		cond := expression.AttributeNotExists(expression.Name("ChapterId"))
 		expr, err := expression.NewBuilder().WithCondition(cond).Build()
 		if err != nil {
-			log.Printf("Failed to build expression for %v. Here's why: %v\n", entry.ChapterId, err)
+			log.Fatalf("Failed to build expression for %v. Here's why: %v\n", entry.ChapterId, err.Error())
 		}
 
 		input := &dynamodb.PutItemInput{
@@ -159,7 +159,7 @@ func ChapterListRequest(provider *string, sourceUrl *string, tableName string, d
 
 		_, err = ddbClient.PutItem(input)
 		if err != nil {
-			log.Printf("Failed to store input of %v. Here's why: %v\n", entry.ChapterId, err)
+			log.Fatalf("Failed to store input of %v. Here's why: %v\n", entry.ChapterId, err.Error())
 		} else {
 			log.Printf("Finished storing input of %v.", entry.ChapterId)
 			queue := &sqs.SendMessageBatchRequestEntry{
@@ -198,7 +198,7 @@ func ChapterListRequest(provider *string, sourceUrl *string, tableName string, d
 		}
 		_, err := sqsClient.SendMessageBatch(input)
 		if err != nil {
-			log.Printf("Failed to send batch message. Here's why: %v\n", err)
+			log.Fatalf("Failed to send batch message. Here's why: %v\n", err.Error())
 		}
 	}
 	return nil
@@ -212,7 +212,13 @@ func ChapterDataRequest(provider *string, sourceUrl *string, tableName string, d
 
 	updateKey, err := dynamodbattribute.MarshalMap(key)
 	if err != nil {
-		log.Printf("Failed to marshal update key of %v. Here's why: %v\n", key.ChapterId, err)
+		log.Fatalf("Failed to marshal update key of %v. Here's why: %v\n", key.ChapterId, err.Error())
+		return err
+	}
+
+	chapterContent, err := dynamodbattribute.Marshal(data.ChapterContent)
+	if err != nil {
+		log.Fatalf("Failed to marshal chapter content of %v. Here's why: %v\n", key.ChapterId, err.Error())
 		return err
 	}
 
@@ -232,7 +238,7 @@ func ChapterDataRequest(provider *string, sourceUrl *string, tableName string, d
 			":cu": {S: aws.String(data.ChapterShortUrl)},
 			":cp": {S: aws.String(data.ChapterPrev)},
 			":cn": {S: aws.String(data.ChapterNext)},
-			":cc": {S: aws.StringSlice(data.ChapterContent)[0]},
+			":cc": chapterContent,
 			":sd": {S: aws.String(data.ScrapeDate)},
 		},
 		UpdateExpression: aws.String("SET #CT = :ct, #CU = :cu, #CP = :cp, #CN = :cn, #CC = :cc, #SD = :sd"),
@@ -240,7 +246,7 @@ func ChapterDataRequest(provider *string, sourceUrl *string, tableName string, d
 
 	_, err = ddbClient.UpdateItem(input)
 	if err != nil {
-		log.Printf("Failed to store input of %v. Here's why: %v\n", key.ChapterId, err)
+		log.Fatalf("Failed to store input of %v. Here's why: %v\n", key.ChapterId, err.Error())
 		return err
 	} else {
 		log.Printf("Finished storing input of %v.", key.ChapterId)

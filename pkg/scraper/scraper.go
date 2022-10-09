@@ -80,7 +80,7 @@ func ScrapeSeriesList(provider *string, sourceUrl *string) ([]SeriesNew, error) 
 	})
 
 	collector.OnError(func(r *colly.Response, err error) {
-		log.Printf("Couldn't fetch '%v'. Status code: '%v'. Error: %v\n", r.StatusCode, r.Request.URL, err)
+		log.Fatalf("Couldn't fetch '%v'. Status code: '%v'. Error: %v\n", r.StatusCode, r.Request.URL, err.Error())
 		scrapeError = err
 	})
 
@@ -124,7 +124,7 @@ func ScrapeSeriesData(provider *string, sourceUrl *string) (*SeriesKey, *SeriesU
 	})
 
 	collector.OnError(func(r *colly.Response, err error) {
-		log.Printf("Couldn't fetch '%v'. Status code: '%v'. Error: %v\n", r.StatusCode, r.Request.URL, err)
+		log.Fatalf("Couldn't fetch '%v'. Status code: '%v'. Error: %v\n", r.StatusCode, r.Request.URL, err.Error())
 		scrapeError = err
 	})
 
@@ -170,7 +170,7 @@ func ScrapeChapterList(provider *string, sourceUrl *string) ([]ChapterNew, error
 	})
 
 	collector.OnError(func(r *colly.Response, err error) {
-		log.Printf("Couldn't fetch '%v'. Status code: '%v'. Error: %v\n", r.StatusCode, r.Request.URL, err)
+		log.Fatalf("Couldn't fetch '%v'. Status code: '%v'. Error: %v\n", r.StatusCode, r.Request.URL, err.Error())
 		scrapeError = err
 	})
 
@@ -182,7 +182,7 @@ func ScrapeChapterList(provider *string, sourceUrl *string) ([]ChapterNew, error
 		orderRaw, _ := h.DOM.ParentsFiltered("li").Attr("data-num")
 		orderValue, _ := strconv.Atoi(reOrder.FindString(orderRaw))
 		item := ChapterNew{
-			SeriesProvider:    "asura",
+			SeriesProvider:    *provider,
 			ChapterId:         reUrl.ReplaceAllString(urlArr[len(urlArr)-2], ""),
 			ChapterShortTitle: reTitle.ReplaceAllString(strings.TrimSpace(h.ChildText("span.chapternum")), " "),
 			ChapterDate:       strings.TrimSpace(h.ChildText("span.chapterdate")),
@@ -220,7 +220,7 @@ func ScrapeChapterData(provider *string, sourceUrl *string) (*ChapterKey, *Chapt
 	})
 
 	collector.OnError(func(r *colly.Response, err error) {
-		log.Printf("Couldn't fetch '%v'. Status code: '%v'. Error: %v\n", r.StatusCode, r.Request.URL, err)
+		log.Fatalf("Couldn't fetch '%v'. Status code: '%v'. Error: %v\n", r.StatusCode, r.Request.URL, err.Error())
 		scrapeError = err
 	})
 
@@ -237,13 +237,23 @@ func ScrapeChapterData(provider *string, sourceUrl *string) (*ChapterKey, *Chapt
 		var tsReaderValue TSReaderScript
 		err := json.Unmarshal([]byte(tsReaderRaw[1]), &tsReaderValue)
 		if err != nil {
-			log.Fatalf("Couldn't unmarshal ts_reader script. Error: %v\n", err)
+			log.Fatalf("Couldn't unmarshal ts_reader script. Error: %v\n", err.Error())
+		}
+		prevUrl := strings.Split(tsReaderValue.PrevURL, "/")
+		nextUrl := strings.Split(tsReaderValue.NextURL, "/")
+		var prevUrlVal string
+		var nextUrlVal string
+		if len(prevUrl) > 1 {
+			prevUrlVal = prevUrl[len(prevUrl)-2]
+		}
+		if len(nextUrl) > 1 {
+			nextUrlVal = nextUrl[len(nextUrl)-2]
 		}
 		data = ChapterUpdate{
 			ChapterTitle:    strings.TrimSpace(h.ChildText("h1.entry-title")),
 			ChapterShortUrl: h.ChildAttr("link[rel='shortlink']", "href"),
-			ChapterPrev:     tsReaderValue.PrevURL,
-			ChapterNext:     tsReaderValue.NextURL,
+			ChapterPrev:     reUrl.ReplaceAllString(prevUrlVal, ""),
+			ChapterNext:     reUrl.ReplaceAllString(nextUrlVal, ""),
 			ChapterContent:  tsReaderValue.Sources[0].Images,
 			ScrapeDate:      time.Now().Format(time.RFC3339),
 		}
