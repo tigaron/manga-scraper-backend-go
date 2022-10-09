@@ -1,8 +1,10 @@
 package scraper
 
 import (
+	"encoding/json"
 	"log"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -53,6 +55,14 @@ type ChapterNew struct {
 	ScrapeDate        string
 }
 
+type TSReaderScript struct {
+	PrevURL string `json:"prevUrl"`
+	NextURL string `json:"nextUrl"`
+	Sources []struct {
+		Images []string `json:"images"`
+	} `json:"sources"`
+}
+
 func ScrapeSeriesList(provider *string, sourceUrl *string) ([]SeriesNew, error) {
 	var result = new([]SeriesNew)
 	var scrapeError error
@@ -76,11 +86,11 @@ func ScrapeSeriesList(provider *string, sourceUrl *string) ([]SeriesNew, error) 
 
 	collector.OnHTML("div.soralist a.series", func(h *colly.HTMLElement) {
 		urlArr := strings.Split(h.Attr("href"), "/")
-		re := regexp.MustCompile(`^\d+-?`)
+		reUrl := regexp.MustCompile(`^\d+-?`)
 		item := SeriesNew{
 			WebtoonProvider: *provider,
-			SeriesId:        re.ReplaceAllString(urlArr[len(urlArr)-2], ""),
-			SeriesTitle:     h.Text,
+			SeriesId:        reUrl.ReplaceAllString(urlArr[len(urlArr)-2], ""),
+			SeriesTitle:     strings.TrimSpace(h.Text),
 			SeriesUrl:       h.Attr("href"),
 			ScrapeDate:      time.Now().Format(time.RFC3339),
 		}
@@ -120,16 +130,16 @@ func ScrapeSeriesData(provider *string, sourceUrl *string) (*SeriesKey, *SeriesU
 
 	collector.OnHTML("html", func(h *colly.HTMLElement) {
 		urlArr := strings.Split(*sourceUrl, "/")
-		reId := regexp.MustCompile(`^\d+-?`)
+		reUrl := regexp.MustCompile(`^\d+-?`)
 		key = SeriesKey{
 			WebtoonProvider: *provider,
-			SeriesId:        reId.ReplaceAllString(urlArr[len(urlArr)-2], ""),
+			SeriesId:        reUrl.ReplaceAllString(urlArr[len(urlArr)-2], ""),
 		}
 		reSynopsis := regexp.MustCompile(`\n`)
 		data = SeriesUpdate{
 			SeriesCover:    h.ChildAttr("div.thumb img", "src"),
 			SeriesShortUrl: h.ChildAttr("link[rel='shortlink']", "href"),
-			SeriesSynopsis: reSynopsis.ReplaceAllString(strings.TrimSpace(h.ChildText("div.entry-content")), `<br />`),
+			SeriesSynopsis: reSynopsis.ReplaceAllString(strings.TrimSpace(h.ChildText("div.entry-content")), "<br />"),
 			ScrapeDate:     time.Now().Format(time.RFC3339),
 		}
 	})
@@ -143,10 +153,107 @@ func ScrapeSeriesData(provider *string, sourceUrl *string) (*SeriesKey, *SeriesU
 	return &key, &data, scrapeError
 }
 
-func ScrapeChaptersList(provider *string, sourceUrl *string) error {
-	return nil
+func ScrapeChapterList(provider *string, sourceUrl *string) ([]ChapterNew, error) {
+	var result = new([]ChapterNew)
+	var scrapeError error
+
+	collector := colly.NewCollector(
+		colly.UserAgent("Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36"),
+	)
+
+	collector.OnRequest(func(r *colly.Request) {
+		log.Printf("Starting to scrape '%v'.", r.URL)
+	})
+
+	collector.OnResponse(func(r *colly.Response) {
+		log.Printf("Got response code of '%v'.", r.StatusCode)
+	})
+
+	collector.OnError(func(r *colly.Response, err error) {
+		log.Printf("Couldn't fetch '%v'. Status code: '%v'. Error: %v\n", r.StatusCode, r.Request.URL, err)
+		scrapeError = err
+	})
+
+	collector.OnHTML("div.eplister a", func(h *colly.HTMLElement) {
+		urlArr := strings.Split(h.Attr("href"), "/")
+		reUrl := regexp.MustCompile(`^\d+-?`)
+		reTitle := regexp.MustCompile(`\n`)
+		reOrder := regexp.MustCompile(`\d+`)
+		orderRaw, _ := h.DOM.ParentsFiltered("li").Attr("data-num")
+		orderValue, _ := strconv.Atoi(reOrder.FindString(orderRaw))
+		item := ChapterNew{
+			SeriesProvider:    "asura",
+			ChapterId:         reUrl.ReplaceAllString(urlArr[len(urlArr)-2], ""),
+			ChapterShortTitle: reTitle.ReplaceAllString(strings.TrimSpace(h.ChildText("span.chapternum")), " "),
+			ChapterDate:       strings.TrimSpace(h.ChildText("span.chapterdate")),
+			ChapterUrl:        h.Attr("href"),
+			ChapterOrder:      orderValue,
+			ScrapeDate:        time.Now().Format(time.RFC3339),
+		}
+		*result = append(*result, item)
+	})
+
+	collector.OnScraped(func(r *colly.Response) {
+		log.Printf("Finished scraping '%v'.", r.Request.URL)
+	})
+
+	collector.Visit(*sourceUrl)
+
+	return *result, scrapeError
 }
 
-func ScrapeChaptersData(provider *string, sourceUrl *string) error {
-	return nil
+func ScrapeChapterData(provider *string, sourceUrl *string) (*ChapterKey, *ChapterUpdate, error) {
+	var key ChapterKey
+	var data ChapterUpdate
+	var scrapeError error
+
+	collector := colly.NewCollector(
+		colly.UserAgent("Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36"),
+	)
+
+	collector.OnRequest(func(r *colly.Request) {
+		log.Printf("Starting to scrape '%v'.", r.URL)
+	})
+
+	collector.OnResponse(func(r *colly.Response) {
+		log.Printf("Got response code of '%v'.", r.StatusCode)
+	})
+
+	collector.OnError(func(r *colly.Response, err error) {
+		log.Printf("Couldn't fetch '%v'. Status code: '%v'. Error: %v\n", r.StatusCode, r.Request.URL, err)
+		scrapeError = err
+	})
+
+	collector.OnHTML("html", func(h *colly.HTMLElement) {
+		urlArr := strings.Split(*sourceUrl, "/")
+		reUrl := regexp.MustCompile(`^\d+-?`)
+		key = ChapterKey{
+			SeriesProvider: *provider,
+			ChapterId:      reUrl.ReplaceAllString(urlArr[len(urlArr)-2], ""),
+		}
+		tsReaderScript := h.ChildText("script:contains('ts_reader.run')")
+		reScript := regexp.MustCompile(`^ts_reader.run\((.*)\);`)
+		tsReaderRaw := reScript.FindStringSubmatch(tsReaderScript)
+		var tsReaderValue TSReaderScript
+		err := json.Unmarshal([]byte(tsReaderRaw[1]), &tsReaderValue)
+		if err != nil {
+			log.Fatalf("Couldn't unmarshal ts_reader script. Error: %v\n", err)
+		}
+		data = ChapterUpdate{
+			ChapterTitle:    strings.TrimSpace(h.ChildText("h1.entry-title")),
+			ChapterShortUrl: h.ChildAttr("link[rel='shortlink']", "href"),
+			ChapterPrev:     tsReaderValue.PrevURL,
+			ChapterNext:     tsReaderValue.NextURL,
+			ChapterContent:  tsReaderValue.Sources[0].Images,
+			ScrapeDate:      time.Now().Format(time.RFC3339),
+		}
+	})
+
+	collector.OnScraped(func(r *colly.Response) {
+		log.Printf("Finished scraping '%v'.", r.Request.URL)
+	})
+
+	collector.Visit(*sourceUrl)
+
+	return &key, &data, scrapeError
 }
